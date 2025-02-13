@@ -36,8 +36,8 @@ python src/build_graphs/add_labels.py \
 
 ### 3. InfEHR GNN can be trained with and without supervision:
 
-# Self-supervised:
-For self-supervised pre-training using VicReg:
+#### Self-supervised:
+For self-supervised pre-training using custom loss:
 ```bash
 python src/train_unlabeled.py \
     --log-dir ./logs \
@@ -60,7 +60,9 @@ python src/train_unlabeled.py \
     --batch-size 1 \
     --device cuda
 ```
-# Weakly supervised: 
+#### Weakly supervised:
+For training with probabilistic labels:
+```bash
 python src/train.py \
     --log-dir ./logs \
     --model-save-dir ./models \
@@ -80,3 +82,4 @@ python src/train.py \
     --custom-loss-epoch 1 \
     --weight-lr 0.0001 \
     --device cuda
+```
