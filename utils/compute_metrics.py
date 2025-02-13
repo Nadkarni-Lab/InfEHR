@@ -203,5 +203,21 @@ def analyze_predictions(probabilities: np.ndarray,
     print("\nComparison of Actual vs Theoretical Values:")
     print(comparison.round(3))
 
-    return all_metrics
+    return all_metrics 
+
+# Examples:
+#results_df = analyze_thresholds(
+#    df['class_1'].values,
+#    df['True Label'].values,
+#    n_thresholds=350
+#)
+#results_df[results_df['threshold'] >= 0.49]
+
+
+#analyze_predictions(
+#    df['aki_positive'].values,
+#    df['True Label'].values,
+#    threshold=0.50
+#)
+
 
