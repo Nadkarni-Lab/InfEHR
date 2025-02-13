@@ -3,6 +3,7 @@ This repository accompanies the preprint:
 **InfEHR: Resolving Clinical Uncertainty through Deep Geometric Learning on Electronic Health Records https://www.medrxiv.org/content/10.1101/2025.01.31.25321471v1)**  
 
 ## Usage Examples
+Please use the packages as defined in environment.yml
 
 ### 1. Build Attributed Graphs
 To construct patient graphs from the preprocessed data:
@@ -83,6 +84,9 @@ python src/train.py \
     --weight-lr 0.0001 \
     --device cuda
 ```
+
+
+
 
 ## Citation
 If you use this code in your research, please cite our paper:
