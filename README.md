@@ -83,3 +83,15 @@ python src/train.py \
     --weight-lr 0.0001 \
     --device cuda
 ```
+
+## Citation
+If you use this code in your research, please cite our paper:
+
+```bibtex
+@article{kauffman2025infehr,
+   title={InfEHR: Resolving Clinical Uncertainty through Deep Geometric Learning on Electronic Health Records},
+   author={Kauffman, Justin and others},
+   journal={medRxiv},
+   year={2025},
+   doi={10.1101/2025.01.31.25321471}
+}
