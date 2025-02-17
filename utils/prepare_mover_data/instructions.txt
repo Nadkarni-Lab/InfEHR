@@ -1,1 +1,11 @@
-
+For processing medications, we consider only the following MAR types (in column MAR_ACTION_NM): 
+Given                         
+New Bag                        
+Rate Change                    
+Given by Other                  
+Patch Applied                   
+Rate Change Dual Sign           
+Bolus From Bag                  
+Restarted                       
+Given in incremental doses        
+ED Continuing Infusion            
