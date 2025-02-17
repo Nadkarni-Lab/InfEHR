@@ -755,6 +755,14 @@ if __name__ == "__main__":
             for _, row in labs_int.iterrows()
         }
         
+        labs_df['Interval Index'] = labs_df.apply(
+            lambda row: assign_interval_index_vectorized(
+                row['standardized_value'],
+                intervals_dict.get(row['convert_sinai'].lower(), [])
+            ) if row['convert_sinai'].lower() in intervals_dict else np.nan,
+            axis=1
+        )
+        
         # Process vitals intervals
         logger.info("Step 5: Processing vitals intervals")
         df = joblib.load(vitals_output)
@@ -776,12 +784,15 @@ if __name__ == "__main__":
         
         # Save results
         output_vitals = os.path.join(args.output_dir, 'vitals_intervals_cleaned.bz2')
+        output_labs = os.path.join(args.output_dir, 'labs_intervals_cleaned.bz2')
         joblib.dump(df_cleaned, output_vitals, compress=('bz2',3))
+        joblib.dump(labs_df, output_labs, compress=('bz2',3))
         
         logger.info("Data standardization pipeline completed successfully")
         logger.info(f"Processed files saved to: {args.output_dir}")
         logger.info(f"Lab processing reports available in: {labs_results['report_dir']}")
         logger.info(f"Final vitals file saved to: {output_vitals}")
+        logger.info(f"Final labs file saved to: {output_labs}")
         
     except Exception as e:
         logger.error(f"Error during processing: {str(e)}")
