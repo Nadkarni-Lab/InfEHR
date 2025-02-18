@@ -407,10 +407,6 @@ class ClinicalLabStandardizer:
         
         return report_dir
 
-import pandas as pd
-import numpy as np
-import logging
-from typing import List, Tuple
 
 def assign_interval_index_vectorized(lab_value: float, intervals: List[Tuple]) -> int:
     """
@@ -462,33 +458,6 @@ def assign_interval_index_vectorized_vitals(vital_value: float, intervals: List[
     # Above last interval    
     return len(intervals)
 
-def clean_vitals(df: pd.DataFrame, summary_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Clean vitals data using summary statistics.
-    
-    Args:
-        df: Input DataFrame with vitals measurements
-        summary_df: DataFrame with summary statistics for each vital
-        
-    Returns:
-        DataFrame with cleaned values
-    """
-    # Ensure MEAS_VALUE is numeric, coercing errors to NaN
-    df['MEAS_VALUE'] = pd.to_numeric(df['MEAS_VALUE'], errors='coerce')
-    
-    # Loop through each vital in summary stats and apply bounds
-    for _, row in summary_df.iterrows():
-        vital_name = row['Vitals Name']
-        if vital_name in df['convert_sinai'].unique():
-            mask = df['convert_sinai'] == vital_name
-            df.loc[mask, 'clean_val'] = df.loc[mask, 'MEAS_VALUE'].clip(
-                lower=row['1%'],
-                upper=row['99%']
-            )
-    
-    return df
-
-# Example usage:
 def process_labs_intervals(labs_df: pd.DataFrame, labs_int: pd.DataFrame, logger: logging.Logger) -> pd.DataFrame:
     """
     Process labs data with KDE-based intervals.
@@ -546,54 +515,6 @@ def process_vitals_intervals(vitals_df: pd.DataFrame, vitals_int: pd.DataFrame, 
     )
     
     return vitals_df
-
-import pandas as pd
-import numpy as np
-from typing import List, Tuple
-
-def assign_interval_index_vectorized(lab_value: float, intervals: List[Tuple]) -> int:
-    """
-    Assign interval index for lab values using KDE-based intervals.
-    
-    Args:
-        lab_value: Laboratory measurement value
-        intervals: List of interval tuples with lower and upper bounds
-        
-    Returns:
-        Index of the matching interval (1-based) or length of intervals if above all
-    """
-    if lab_value < intervals[0][0][0]:  # Below the first interval
-        return 1
-        
-    for i, interval in enumerate(intervals):
-        lower_bound = interval[0][0]
-        upper_bound = interval[1][0]
-        if lower_bound <= lab_value <= upper_bound:
-            return i + 1
-            
-    return len(intervals)  # Above the last interval
-
-def assign_interval_index_vectorized_vitals(vital_value: float, intervals: List[Tuple]) -> int:
-    """
-    Assign interval index for vital signs using KDE-based intervals.
-    
-    Args:
-        vital_value: Vital sign measurement value 
-        intervals: List of interval tuples with lower and upper bounds
-        
-    Returns:
-        Index of the matching interval (1-based) or length of intervals if above all
-    """
-    if vital_value < intervals[0][0][0]:  # Below the first interval
-        return 1
-        
-    for i, interval in enumerate(intervals):
-        lower_bound = interval[0][0] 
-        upper_bound = interval[1][0]
-        if lower_bound <= vital_value <= upper_bound:
-            return i + 1
-            
-    return len(intervals)  # Above the last interval
 
 def clean_vitals(df: pd.DataFrame, summary_df: pd.DataFrame) -> pd.DataFrame:
     """
