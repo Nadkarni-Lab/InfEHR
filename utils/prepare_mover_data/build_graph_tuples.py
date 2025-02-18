@@ -426,3 +426,13 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Error during processing: {str(e)}")
         raise
+
+### Sample usage: 
+# python build_graph_tuples.py \
+#  --time-df path/to/time.csv \
+#  --labs-path path/to/labs.bz2 \
+#  --vitals-path path/to/vitals.bz2 \
+#  --meds-path path/to/meds.bz2 \
+#  --output-dir outputs/ \
+#  --log-dir logs/ \
+#  --semantic  # optional flag for semantic tuples
