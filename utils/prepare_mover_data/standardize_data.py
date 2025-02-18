@@ -33,6 +33,40 @@ def setup_logger(log_dir: str, run_name: str) -> logging.Logger:
     
     return logger
 
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Process clinical data including vitals, labs, and medications.')
+    
+    # Existing arguments
+    parser.add_argument('--vitals_file', required=True,
+                        help='Path to vitals data CSV')
+    parser.add_argument('--vitals_conversion', required=True,
+                        help='Path to vitals conversion CSV')
+    parser.add_argument('--labs_file', required=True,
+                        help='Path to labs data CSV')
+    parser.add_argument('--labs_conversion', required=True,
+                        help='Path to labs conversion CSV')
+    parser.add_argument('--output_dir', required=True,
+                        help='Directory for output files')
+    parser.add_argument('--log_dir', required=True,
+                        help='Directory for log files')
+    parser.add_argument('--labs_intervals', required=True,
+                       help='Path to labs intervals PKL file')
+    parser.add_argument('--vitals_intervals', required=True,
+                       help='Path to vitals intervals PKL file')
+    parser.add_argument('--vitals_summary', required=True,
+                       help='Path to vitals summary statistics CSV')
+    
+    # New arguments for medications
+    parser.add_argument('--meds_file', required=True,
+                       help='Path to medications data file')
+    parser.add_argument('--meds_conversion', required=True,
+                       help='Path to medications conversion CSV')
+    parser.add_argument('--meds_intervals', required=True,
+                       help='Path to medications intervals PKL file')
+    
+    return parser.parse_args()
+
 def create_conversion_dict(conversion_file: str, source_col: str, target_col: str, unmatch_val: str = 'unmatched') -> Dict:
     """Create and return a conversion dictionary from a CSV file"""
     conversion_df = pd.read_csv(conversion_file)
@@ -789,7 +823,6 @@ def process_vital_signs(vitals_path: str, output_dir: str, logger) -> str:
     
     logger.info(f'Vital signs processing complete. Output saved to: {output_path}')
     return output_path
-
 if __name__ == "__main__":
     args = parse_arguments()
     logger = setup_logger(args.log_dir, "clinical_data_processing")
@@ -803,7 +836,10 @@ if __name__ == "__main__":
             args.labs_conversion,
             args.labs_intervals,
             args.vitals_intervals,
-            args.vitals_summary
+            args.vitals_summary,
+            args.meds_file,
+            args.meds_conversion,
+            args.meds_intervals
         ]
         for input_file in required_files:
             if not os.path.exists(input_file):
@@ -829,14 +865,25 @@ if __name__ == "__main__":
             logger
         )
         
+        # Process medications
+        logger.info("Step 3: Processing medication data")
+        med_processor = MedicationProcessor()
+        meds_output = med_processor.process_medications(
+            args.meds_file,
+            args.meds_conversion,
+            args.output_dir,
+            logger
+        )
+        
         # Load interval data
-        logger.info("Step 3: Loading interval data")
+        logger.info("Step 4: Loading interval data")
         labs_int = joblib.load(args.labs_intervals)
         vitals_int = joblib.load(args.vitals_intervals)
+        meds_int = joblib.load(args.meds_intervals)
         summary_df = pd.read_csv(args.vitals_summary)
         
         # Process labs intervals
-        logger.info("Step 4: Processing labs intervals")
+        logger.info("Step 5: Processing labs intervals")
         labs_df = joblib.load(labs_results['processed_file'])
         intervals_dict = {
             row['Name'].strip().lower(): row['Intervals'] 
@@ -852,7 +899,7 @@ if __name__ == "__main__":
         )
         
         # Process vitals intervals
-        logger.info("Step 5: Processing vitals intervals")
+        logger.info("Step 6: Processing vitals intervals")
         df = joblib.load(vitals_output)
         df = df[df['convert_sinai'] != 'not_matched']
         df_cleaned = clean_vitals(df, summary_df)
@@ -870,21 +917,41 @@ if __name__ == "__main__":
             axis=1
         )
         
+        # Process medication intervals
+        logger.info("Step 7: Processing medication intervals")
+        meds_df = joblib.load(meds_output)
+        meds_intervals_dict = {
+            row['Name'].strip().lower(): row['Intervals'] 
+            for _, row in meds_int.iterrows()
+        }
+        
+        meds_df['Interval Index'] = meds_df.apply(
+            lambda row: assign_interval_index_vectorized(
+                row['DOSE'], # Assuming 'DOSE' is the column to use for intervals
+                meds_intervals_dict.get(row['convert_sinai'].lower(), [])
+            ) if row['convert_sinai'].lower() in meds_intervals_dict else np.nan,
+            axis=1
+        )
+        
         # Save results
         output_vitals = os.path.join(args.output_dir, 'vitals_intervals_cleaned.bz2')
         output_labs = os.path.join(args.output_dir, 'labs_intervals_cleaned.bz2')
+        output_meds = os.path.join(args.output_dir, 'meds_intervals_cleaned.bz2')
+        
         joblib.dump(df_cleaned, output_vitals, compress=('bz2',3))
         joblib.dump(labs_df, output_labs, compress=('bz2',3))
+        joblib.dump(meds_df, output_meds, compress=('bz2',3))
         
         logger.info("Data standardization pipeline completed successfully")
         logger.info(f"Processed files saved to: {args.output_dir}")
         logger.info(f"Lab processing reports available in: {labs_results['report_dir']}")
         logger.info(f"Final vitals file saved to: {output_vitals}")
         logger.info(f"Final labs file saved to: {output_labs}")
+        logger.info(f"Final medications file saved to: {output_meds}")
         
     except Exception as e:
         logger.error(f"Error during processing: {str(e)}")
-        raise 
+        raise
 
 ######## Example Usage ########
 # python standardize_data.py \
@@ -892,8 +959,11 @@ if __name__ == "__main__":
 #    --vitals_conversion /path/to/vitals_conversion.csv \
 #    --labs_file /path/to/labs.csv \
 #    --labs_conversion /path/to/labs_conversion.csv \
+#    --meds_file /path/to/meds.bz2 \
+#    --meds_conversion /path/to/meds_conversion.csv \
 #    --output_dir /path/to/output/ \
 #    --log_dir /path/to/logs/ \
 #    --labs_intervals /path/to/labs_kde_df_mover.pkl \
 #    --vitals_intervals /path/to/vitals_kde_df_mover.pkl \
+#    --meds_intervals /path/to/meds_kde_df_mover.pkl \
 #    --vitals_summary /path/to/vitals_summary_statistics.csv
