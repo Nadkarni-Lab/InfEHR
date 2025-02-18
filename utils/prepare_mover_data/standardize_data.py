@@ -407,6 +407,173 @@ class ClinicalLabStandardizer:
         
         return report_dir
 
+import pandas as pd
+import numpy as np
+import logging
+import joblib
+from typing import Dict, List, Tuple
+
+class MedicationProcessor:
+    """Handles standardization and processing of medication data"""
+    def __init__(self):
+        # Define standard MAR actions that indicate medication administration
+        self.valid_mar_actions = [
+            'Given', 'Rate Change', 'New Bag', 'Given by Other', 
+            'Patch Applied', 'Rate Change Dual Sign', 'Restarted',
+            'Bolus From Bag', 'ED Continuing Infusion', 
+            'Given in incremental doses'
+        ]
+
+    @staticmethod
+    def normalize_med_string(s: str) -> str:
+        """
+        Normalize medication strings for consistent matching.
+        
+        Args:
+            s: Input medication string
+            
+        Returns:
+            Normalized string
+        """
+        if pd.isna(s):
+            return s
+        # Remove extra spaces, including trailing
+        s = ' '.join(s.split()).strip()
+        # Convert to uppercase for case-insensitive matching
+        return s.upper()
+
+    def create_conversion_dict(self, conversion_file: str, source_col: str, 
+                             target_col: str, unmatch_val: str = 'no matches found') -> Dict:
+        """
+        Create medication name conversion dictionary from CSV file.
+        
+        Args:
+            conversion_file: Path to conversion CSV
+            source_col: Column name for source medication names
+            target_col: Column name for target medication names
+            unmatch_val: Value indicating no match found
+            
+        Returns:
+            Dictionary mapping normalized medication names
+        """
+        conversion_df = pd.read_csv(conversion_file)
+        
+        # Normalize medication names
+        conversion_df[f'{source_col}_normalized'] = conversion_df[source_col].apply(self.normalize_med_string)
+        conversion_df[f'{target_col}_normalized'] = conversion_df[target_col].apply(self.normalize_med_string)
+        
+        # Create reversed dictionary
+        reversed_dict = {}
+        for source, target in zip(conversion_df[f'{source_col}_normalized'], 
+                                conversion_df[f'{target_col}_normalized']):
+            if source != unmatch_val.upper() and not pd.isna(source) and not pd.isna(target):
+                reversed_dict[target] = source
+                
+        return reversed_dict
+
+    def process_medications(self, meds_file: str, conversion_file: str, 
+                          output_dir: str, logger: logging.Logger) -> str:
+        """
+        Process medication data including name standardization and MAR filtering.
+        
+        Args:
+            meds_file: Path to medications data file
+            conversion_file: Path to medication name conversion file
+            output_dir: Directory for output files
+            logger: Logger instance
+            
+        Returns:
+            Path to processed output file
+        """
+        logger.info("Starting medication processing")
+        
+        # Load medications data
+        meds = joblib.load(meds_file)
+        logger.info(f"Loaded medication data with {len(meds)} records")
+        
+        # Create conversion dictionary
+        conversion_dict = self.create_conversion_dict(
+            conversion_file,
+            'sinai_med',
+            'mover_med'
+        )
+        
+        # Apply conversion with normalized strings
+        meds['convert_sinai'] = meds['MEDICATION_NM'].apply(
+            lambda x: conversion_dict.get(self.normalize_med_string(x), 'not_matched')
+        )
+        
+        # Filter unmatched medications
+        meds_matched = meds[meds['convert_sinai'] != 'not_matched']
+        logger.info(f"Retained {len(meds_matched)} records after name matching")
+        
+        # Filter by valid MAR actions
+        meds_filtered = meds_matched[meds_matched['MAR_ACTION_NM'].isin(self.valid_mar_actions)]
+        logger.info(f"Retained {len(meds_filtered)} records after MAR action filtering")
+        
+        # Generate MAR action distribution report
+        mar_counts = meds_filtered['MAR_ACTION_NM'].value_counts()
+        logger.info("MAR action distribution:")
+        logger.info(mar_counts)
+        
+        # Save processed data
+        output_file = os.path.join(output_dir, 'processed_medications.bz2')
+        joblib.dump(meds_filtered, output_file, compress=('bz2', 3))
+        logger.info(f"Saved processed data to {output_file}")
+        
+        return output_file
+
+    def generate_processing_report(self, 
+                                 original_df: pd.DataFrame, 
+                                 processed_df: pd.DataFrame,
+                                 output_dir: str,
+                                 logger: logging.Logger) -> str:
+        """
+        Generate detailed report of medication processing results.
+        
+        Args:
+            original_df: Original medications DataFrame
+            processed_df: Processed medications DataFrame
+            output_dir: Output directory for report
+            logger: Logger instance
+            
+        Returns:
+            Path to report directory
+        """
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        report_dir = os.path.join(output_dir, f'medication_processing_report_{timestamp}')
+        os.makedirs(report_dir, exist_ok=True)
+        
+        # Summary statistics
+        summary = {
+            'Total Original Records': len(original_df),
+            'Records After Name Matching': len(processed_df),
+            'Unique Medications Before': len(original_df['MEDICATION_NM'].unique()),
+            'Unique Medications After': len(processed_df['convert_sinai'].unique()),
+            'MAR Actions Distribution': processed_df['MAR_ACTION_NM'].value_counts().to_dict()
+        }
+        
+        # Save summary
+        with open(os.path.join(report_dir, 'processing_summary.json'), 'w') as f:
+            json.dump(summary, f, indent=4)
+            
+        # Save sample of unmatched medications
+        unmatched = original_df[~original_df['MEDICATION_NM'].isin(
+            processed_df['MEDICATION_NM']
+        )]['MEDICATION_NM'].unique()
+        pd.Series(unmatched).to_csv(
+            os.path.join(report_dir, 'unmatched_medications.csv'),
+            index=False
+        )
+        
+        logger.info(f"Generated processing report in {report_dir}")
+        return report_dir
+
+
+
+
+
+
 
 def assign_interval_index_vectorized(lab_value: float, intervals: List[Tuple]) -> int:
     """
